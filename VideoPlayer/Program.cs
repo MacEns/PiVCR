@@ -12,7 +12,15 @@ class Program
 {
     private static readonly string[] SupportedVideoExtensions =
     {
-        ".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".3gp"
+        ".mp4",
+        ".avi",
+        ".mkv",
+        ".mov",
+        ".wmv",
+        ".flv",
+        ".webm",
+        ".m4v",
+        ".3gp",
     };
 
     static async Task Main(string[] args)
@@ -40,14 +48,13 @@ class Program
     {
         // For Raspberry Pi, FFMpeg is typically installed via apt
         // Set the path where FFMpeg binaries are located
-        if (RuntimeInformation.OSArchitecture == Architecture.Arm ||
-            RuntimeInformation.OSArchitecture == Architecture.Arm64)
+        if (RuntimeInformation.OSArchitecture is Architecture.Arm or Architecture.Arm64)
         {
             // Raspberry Pi paths
             GlobalFFOptions.Configure(new FFOptions
             {
                 BinaryFolder = "/usr/bin/", // Default location for apt-installed FFMpeg
-                TemporaryFilesFolder = "/tmp/"
+                TemporaryFilesFolder = "/tmp/",
             });
         }
         else
@@ -87,12 +94,12 @@ class Program
                     Arguments = "ffmpeg",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
-                    CreateNoWindow = true
+                    CreateNoWindow = true,
                 }
             };
 
             process.Start();
-            string result = process.StandardOutput.ReadToEnd();
+            var result = process.StandardOutput.ReadToEnd();
             process.WaitForExit();
 
             return process.ExitCode == 0 ? result.Trim().Split('\n')[0] : string.Empty;
@@ -114,7 +121,7 @@ class Program
             Console.WriteLine("4. Exit");
             Console.Write("\nSelect option (1-4): ");
 
-            string choice = Console.ReadLine() ?? "";
+            var choice = Console.ReadLine() ?? "";
 
             switch (choice)
             {
@@ -140,7 +147,7 @@ class Program
     private static async Task HandlePlayVideo()
     {
         Console.Write("Enter video file path: ");
-        string? videoPath = Console.ReadLine();
+        var videoPath = Console.ReadLine();
 
         if (!string.IsNullOrWhiteSpace(videoPath))
         {
@@ -151,7 +158,7 @@ class Program
     private static async Task HandleListVideos()
     {
         Console.Write("Enter directory path (or press Enter for current directory): ");
-        string? dirPath = Console.ReadLine();
+        var dirPath = Console.ReadLine();
 
         if (string.IsNullOrWhiteSpace(dirPath))
         {
@@ -164,7 +171,7 @@ class Program
     private static async Task HandleVideoInfo()
     {
         Console.Write("Enter video file path: ");
-        string? videoPath = Console.ReadLine();
+        var videoPath = Console.ReadLine();
 
         if (!string.IsNullOrWhiteSpace(videoPath))
         {
