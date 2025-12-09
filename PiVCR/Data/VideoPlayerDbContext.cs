@@ -1,17 +1,17 @@
 using Microsoft.EntityFrameworkCore;
-using VideoPlayer.Models;
+using PiVCR.Models;
 
-namespace VideoPlayer.Data;
+namespace PiVCR.Data;
 
-public class VideoPlayerDbContext : DbContext
+public class PiVCRDbContext : DbContext
 {
     public DbSet<VideoFile> VideoFiles { get; set; }
 
-    public VideoPlayerDbContext()
+    public PiVCRDbContext()
     {
     }
 
-    public VideoPlayerDbContext(DbContextOptions<VideoPlayerDbContext> options) : base(options)
+    public PiVCRDbContext(DbContextOptions<PiVCRDbContext> options) : base(options)
     {
     }
 
@@ -19,9 +19,9 @@ public class VideoPlayerDbContext : DbContext
     {
         if (!optionsBuilder.IsConfigured)
         {
-            var dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VideoPlayer");
+            var dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PiVCR");
             Directory.CreateDirectory(dbPath);
-            var connectionString = $"Data Source={Path.Combine(dbPath, "videoplayer.db")}";
+            var connectionString = $"Data Source={Path.Combine(dbPath, "pivcr.db")}";
             optionsBuilder.UseSqlite(connectionString);
         }
     }

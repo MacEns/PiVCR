@@ -1,21 +1,21 @@
 using FFMpegCore;
 using Microsoft.EntityFrameworkCore;
-using VideoPlayer.Data;
-using VideoPlayer.Models;
+using PiVCR.Data;
+using PiVCR.Models;
 
-namespace VideoPlayer.Services;
+namespace PiVCR.Services;
 
 public class VideoFileService
 {
-    private readonly VideoPlayerDbContext _context;
+    private readonly PiVCRDbContext _context;
 
     public VideoFileService()
     {
-        _context = new VideoPlayerDbContext();
+        _context = new PiVCRDbContext();
         InitializeDatabase();
     }
 
-    public VideoFileService(VideoPlayerDbContext context)
+    public VideoFileService(PiVCRDbContext context)
     {
         _context = context;
         InitializeDatabase();

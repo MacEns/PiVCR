@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace VideoPlayer.Models;
+namespace PiVCR.Models;
 
 public class VideoFile
 {

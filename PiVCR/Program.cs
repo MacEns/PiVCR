@@ -1,5 +1,5 @@
-﻿using VideoPlayer;
-using VideoPlayer.Models;
+﻿using PiVCR;
+using PiVCR.Models;
 
 class Program
 {
@@ -7,7 +7,7 @@ class Program
 
     static async Task Main(string[] args)
     {
-        Console.WriteLine("=== Raspberry Pi Video Player ===");
+        Console.WriteLine("=== PiVCR - Raspberry Pi Video Control & Recording ===");
         Console.WriteLine();
 
         // Configure FFMpeg binary path for Raspberry Pi
@@ -449,7 +449,7 @@ class Program
         }
     }
 
-    private static async Task DisplayVideoListAndPlay(IEnumerable<VideoPlayer.Models.VideoFile> videos, string title)
+    private static async Task DisplayVideoListAndPlay(IEnumerable<PiVCR.Models.VideoFile> videos, string title)
     {
         var videoList = videos.ToList();
 

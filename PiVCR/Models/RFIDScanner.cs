@@ -1,7 +1,7 @@
 using System.IO.Ports;
 using System.Text.Json;
 
-namespace VideoPlayer.Models;
+namespace PiVCR.Models;
 
 public class RFIDScanner : IDisposable
 {

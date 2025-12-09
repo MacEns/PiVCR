@@ -1,4 +1,4 @@
-# Raspberry Pi Video Player
+# PiVCR - Raspberry Pi Video Control & Recording
 
 A .NET console application designed to play video files on Raspberry Pi with hardware acceleration support and RFID scanner integration.
 
@@ -287,9 +287,9 @@ speaker-test -t sine -f 1000 -c 2 -s 2
 ### Project Structure
 
 ```
-VideoPlayer/
+PiVCR/
 ├── Program.cs              # Main application logic
-├── VideoPlayer.csproj      # Project file
+├── PiVCR.csproj           # Project file
 ├── appsettings.json        # Configuration file
 └── README.md              # This file
 ```

@@ -7,7 +7,7 @@ all: build
 
 # Build the application
 build:
-	@echo "Building VideoPlayer..."
+	@echo "Building PiVCR..."
 	dotnet build
 
 # Test build
@@ -17,7 +17,7 @@ test: build
 
 # Run the application
 run:
-	@echo "Running VideoPlayer..."
+	@echo "Running PiVCR..."
 	dotnet run
 
 # Clean build artifacts

@@ -9,7 +9,7 @@ A complete .NET console application designed to play videos on Raspberry Pi with
 ### Core Application
 
 -   **Program.cs** - Main application code with video playback functionality
--   **VideoPlayer.csproj** - Project file with dependencies
+-   **PiVCR.csproj** - Project file with dependencies
 -   **appsettings.json** - Configuration file
 
 ### Documentation & Setup

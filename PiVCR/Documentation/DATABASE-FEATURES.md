@@ -13,7 +13,7 @@ The Raspberry Pi Video Player now includes a comprehensive video library managem
 - **File Organization**: Smart categorization by genre and other metadata
 
 ### 🗄️ Database Storage
-- **SQLite Database**: Local storage at `%LocalApplicationData%/VideoPlayer/videoplayer.db`
+- **SQLite Database**: Local storage at `%LocalApplicationData%/PiVCR/pivcr.db`
 - **Entity Framework Core**: Modern ORM with migrations support
 - **Indexed Fields**: Optimized queries for title, genre, dates, favorites
 - **Automatic Database Creation**: No manual setup required
@@ -168,7 +168,7 @@ Select video to play (1-3): 1
 - Automatic format detection
 
 ### Storage Locations
-- **Database**: `%LocalApplicationData%/VideoPlayer/videoplayer.db`
+- **Database**: `%LocalApplicationData%/PiVCR/pivcr.db`
 - **Configuration**: `rfid-config.json` (RFID mappings)
 - **Settings**: `appsettings.json` (application settings)
 

@@ -2,7 +2,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VideoPlayer", "VideoPlayer\VideoPlayer.csproj", "{AF1D5516-30E7-0FF3-B02C-DF26F8DAD1E3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PiVCR", "PiVCR\PiVCR.csproj", "{AF1D5516-30E7-0FF3-B02C-DF26F8DAD1E3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -1,9 +1,9 @@
 using FFMpegCore;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using VideoPlayer.Services;
+using PiVCR.Services;
 
-namespace VideoPlayer;
+namespace PiVCR;
 
 public class VideoManager
 {
