@@ -1,16 +1,18 @@
 # Raspberry Pi Video Player
 
-A .NET console application designed to play video files on Raspberry Pi with hardware acceleration support.
+A .NET console application designed to play video files on Raspberry Pi with hardware acceleration support and RFID scanner integration.
 
 ## Features
 
 -   Cross-platform video playback (optimized for Raspberry Pi)
 -   Hardware acceleration support for Raspberry Pi
+-   **RFID scanner integration for automatic video selection**
 -   Support for multiple video formats (MP4, AVI, MKV, MOV, WMV, FLV, WebM, M4V, 3GP)
 -   Interactive mode for browsing and selecting videos
 -   Video information analysis
 -   Command-line argument support
 -   Directory listing of video files
+-   **RFID tag to video mapping configuration**
 
 ## Prerequisites
 
@@ -102,9 +104,115 @@ The application uses `appsettings.json` for configuration:
             "UseHardwareAcceleration": true,
             "PreferOMXPlayer": true,
             "FFMpegPath": "/usr/bin/ffmpeg"
+        },
+        "RFID": {
+            "Enabled": true,
+            "PortNames": [
+                "/dev/ttyUSB0",
+                "/dev/ttyUSB1",
+                "/dev/ttyACM0",
+                "/dev/ttyACM1"
+            ],
+            "BaudRate": 9600,
+            "DataBits": 8,
+            "Parity": "None",
+            "StopBits": "One",
+            "ConfigFile": "rfid-config.json"
         }
     }
 }
+```
+
+## RFID Scanner Integration
+
+The application supports RFID scanner integration for automatic video playback. When an RFID tag is scanned, the application will automatically play the associated video file.
+
+### RFID Hardware Setup
+
+1. **Connect RFID Scanner to Raspberry Pi:**
+
+    - USB RFID scanners: Connect via USB port
+    - Serial RFID scanners: Connect to GPIO serial pins or USB-to-serial adapter
+
+2. **Common RFID Scanner Types:**
+    - **USB HID Scanners**: Act like keyboards, send RFID data as keystrokes
+    - **Serial Scanners**: Send RFID data via serial communication (RS232/TTL)
+    - **EM4100/EM4102 based scanners**: Most common format
+
+### RFID Configuration
+
+1. **RFID Tag Mapping:**
+   The application uses `rfid-config.json` to map RFID tag IDs to video files:
+
+    ```json
+    {
+        "0123456789": "/home/pi/Videos/movie1.mp4",
+        "9876543210": "/home/pi/Videos/movie2.mp4",
+        "1111111111": "/home/pi/Videos/cartoon.avi",
+        "2222222222": "/home/pi/Videos/documentary.mkv"
+    }
+    ```
+
+2. **Managing RFID Mappings:**
+    - Use interactive mode option 4 to configure RFID settings
+    - Add new tag-to-video mappings
+    - Remove existing mappings
+    - Test RFID scanner connectivity
+
+### RFID Usage
+
+1. **Automatic Mode:**
+
+    - Start the application
+    - RFID scanner will be automatically detected and initialized
+    - Scan any configured RFID tag near the scanner
+    - Associated video will start playing automatically
+
+2. **Interactive Configuration:**
+
+    ```bash
+    dotnet run
+    # Select option 4: RFID Scanner settings
+    # Select option 2: Add new RFID mapping
+    # Scan your RFID tag when prompted
+    # Enter the path to your video file
+    ```
+
+3. **Testing RFID Scanner:**
+    ```bash
+    dotnet run
+    # Select option 4: RFID Scanner settings
+    # Select option 4: Test RFID scanner
+    # Scan RFID tags to see if they're detected
+    ```
+
+### Supported RFID Scanners
+
+-   **USB RFID Scanners**: Most USB HID-compatible scanners
+-   **Serial RFID Scanners**: Connected to `/dev/ttyUSB0`, `/dev/ttyUSB1`, `/dev/ttyACM0`, `/dev/ttyACM1`
+-   **Common formats**: EM4100, EM4102, Mifare (depends on scanner firmware)
+
+### RFID Troubleshooting
+
+**Scanner Not Detected:**
+
+```bash
+# Check USB devices
+lsusb
+
+# Check serial devices
+ls /dev/tty*
+
+# Check permissions
+sudo chmod 666 /dev/ttyUSB0  # Replace with your device
+```
+
+**Permission Issues:**
+
+```bash
+# Add user to dialout group for serial access
+sudo usermod -a -G dialout $USER
+# Logout and login again
 ```
 
 ## Video Playback on Raspberry Pi

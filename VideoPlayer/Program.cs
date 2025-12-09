@@ -1,27 +1,9 @@
-﻿using FFMpegCore;
-using FFMpegCore.Arguments;
-using FFMpegCore.Enums;
-using System;
-using System.IO;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
-
-namespace VideoPlayer;
+﻿using VideoPlayer;
+using VideoPlayer.Models;
 
 class Program
 {
-    private static readonly string[] SupportedVideoExtensions =
-    {
-        ".mp4",
-        ".avi",
-        ".mkv",
-        ".mov",
-        ".wmv",
-        ".flv",
-        ".webm",
-        ".m4v",
-        ".3gp",
-    };
+    private static RFIDScanner? _rfidScanner;
 
     static async Task Main(string[] args)
     {
@@ -29,84 +11,44 @@ class Program
         Console.WriteLine();
 
         // Configure FFMpeg binary path for Raspberry Pi
-        ConfigureFFMpeg();
+        VideoManager.ConfigureFFMpeg();
+
+        // Initialize RFID scanner
+        _rfidScanner = new RFIDScanner();
+        _rfidScanner.TagDetected += OnRFIDTagDetected;
+        await _rfidScanner.InitializeAsync();
 
         if (args.Length > 0)
         {
             // If file path is provided as argument
             string videoPath = args[0];
-            await PlayVideo(videoPath);
+            await VideoManager.PlayVideoAsync(videoPath);
         }
         else
         {
             // Interactive mode
             await InteractiveMode();
         }
+
+        // Cleanup RFID scanner on exit
+        _rfidScanner?.Dispose();
     }
 
-    private static void ConfigureFFMpeg()
+    private static async void OnRFIDTagDetected(object? sender, RFIDTagEventArgs e)
     {
-        // For Raspberry Pi, FFMpeg is typically installed via apt
-        // Set the path where FFMpeg binaries are located
-        if (RuntimeInformation.OSArchitecture is Architecture.Arm or Architecture.Arm64)
+        if (_rfidScanner != null)
         {
-            // Raspberry Pi paths
-            GlobalFFOptions.Configure(new FFOptions
+            var videoPath = _rfidScanner.GetVideoPath(e.TagId);
+            if (videoPath != null)
             {
-                BinaryFolder = "/usr/bin/", // Default location for apt-installed FFMpeg
-                TemporaryFilesFolder = "/tmp/",
-            });
-        }
-        else
-        {
-            // Development/other platforms
-            // FFMpeg should be in PATH or specify custom path
-            try
-            {
-                // Try to find ffmpeg in PATH
-                var ffmpegPath = GetFFMpegPath();
-                if (!string.IsNullOrEmpty(ffmpegPath))
-                {
-                    GlobalFFOptions.Configure(new FFOptions
-                    {
-                        BinaryFolder = Path.GetDirectoryName(ffmpegPath),
-                        TemporaryFilesFolder = Path.GetTempPath()
-                    });
-                }
+                Console.WriteLine($"Playing associated video: {videoPath}");
+                await VideoManager.PlayVideoAsync(videoPath);
             }
-            catch (Exception ex)
+            else
             {
-                Console.WriteLine($"Warning: Could not configure FFMpeg path: {ex.Message}");
-                Console.WriteLine("Please ensure FFMpeg is installed and available in PATH");
+                Console.WriteLine("No video associated with this RFID tag.");
+                Console.WriteLine("Use option 4 to configure RFID mappings.");
             }
-        }
-    }
-
-    private static string GetFFMpegPath()
-    {
-        try
-        {
-            var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "where" : "which",
-                    Arguments = "ffmpeg",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    CreateNoWindow = true,
-                }
-            };
-
-            process.Start();
-            var result = process.StandardOutput.ReadToEnd();
-            process.WaitForExit();
-
-            return process.ExitCode == 0 ? result.Trim().Split('\n')[0] : string.Empty;
-        }
-        catch
-        {
-            return string.Empty;
         }
     }
 
@@ -118,8 +60,11 @@ class Program
             Console.WriteLine("1. Play video file");
             Console.WriteLine("2. List videos in directory");
             Console.WriteLine("3. Get video information");
-            Console.WriteLine("4. Exit");
-            Console.Write("\nSelect option (1-4): ");
+            Console.WriteLine("4. RFID Scanner settings");
+            Console.WriteLine("5. Wait for RFID scan");
+            Console.WriteLine("6. Video Library");
+            Console.WriteLine("7. Exit");
+            Console.Write("\nSelect option (1-7): ");
 
             var choice = Console.ReadLine() ?? "";
 
@@ -129,12 +74,21 @@ class Program
                     await HandlePlayVideo();
                     break;
                 case "2":
-                    await HandleListVideos();
+                    HandleListVideos();
                     break;
                 case "3":
                     await HandleVideoInfo();
                     break;
                 case "4":
+                    await HandleRFIDSettings();
+                    break;
+                case "5":
+                    await HandleRFIDScan();
+                    break;
+                case "6":
+                    await HandleVideoLibrary();
+                    break;
+                case "7":
                     Console.WriteLine("Goodbye!");
                     return;
                 default:
@@ -151,11 +105,11 @@ class Program
 
         if (!string.IsNullOrWhiteSpace(videoPath))
         {
-            await PlayVideo(videoPath);
+            await VideoManager.PlayVideoAsync(videoPath);
         }
     }
 
-    private static async Task HandleListVideos()
+    private static void HandleListVideos()
     {
         Console.Write("Enter directory path (or press Enter for current directory): ");
         var dirPath = Console.ReadLine();
@@ -165,7 +119,7 @@ class Program
             dirPath = Directory.GetCurrentDirectory();
         }
 
-        ListVideosInDirectory(dirPath);
+        VideoManager.ListVideosInDirectory(dirPath);
     }
 
     private static async Task HandleVideoInfo()
@@ -175,234 +129,443 @@ class Program
 
         if (!string.IsNullOrWhiteSpace(videoPath))
         {
-            await ShowVideoInfo(videoPath);
+            await VideoManager.ShowVideoInfoAsync(videoPath);
         }
     }
 
-    private static async Task PlayVideo(string videoPath)
+    private static async Task HandleRFIDSettings()
     {
+        if (_rfidScanner == null)
+        {
+            Console.WriteLine("RFID scanner is not available.");
+            return;
+        }
+
+        while (true)
+        {
+            Console.WriteLine("\nRFID Settings:");
+            Console.WriteLine("1. View current mappings");
+            Console.WriteLine("2. Add new RFID mapping");
+            Console.WriteLine("3. Remove RFID mapping");
+            Console.WriteLine("4. Test RFID scanner");
+            Console.WriteLine("5. Back to main menu");
+            Console.Write("\nSelect option (1-5): ");
+
+            var choice = Console.ReadLine() ?? "";
+
+            switch (choice)
+            {
+                case "1":
+                    _rfidScanner.ShowMappings();
+                    break;
+                case "2":
+                    await AddRFIDMapping();
+                    break;
+                case "3":
+                    await RemoveRFIDMapping();
+                    break;
+                case "4":
+                    await TestRFIDScanner();
+                    break;
+                case "5":
+                    return;
+                default:
+                    Console.WriteLine("Invalid choice. Please try again.");
+                    break;
+            }
+        }
+    }
+
+    private static async Task AddRFIDMapping()
+    {
+        if (_rfidScanner == null) return;
+
+        Console.Write("Enter RFID tag value: ");
+        var rfidTag = Console.ReadLine()?.Trim();
+
+        if (string.IsNullOrWhiteSpace(rfidTag))
+        {
+            Console.WriteLine("Invalid RFID tag value.");
+            return;
+        }
+
+        Console.Write("Enter video file path: ");
+        var videoPath = Console.ReadLine()?.Trim();
+
+        if (string.IsNullOrWhiteSpace(videoPath))
+        {
+            Console.WriteLine("Invalid video path.");
+            return;
+        }
+
+        if (!File.Exists(videoPath))
+        {
+            Console.WriteLine("Warning: Video file does not exist at specified path.");
+        }
+
         try
         {
-            if (!File.Exists(videoPath))
-            {
-                Console.WriteLine($"Error: File '{videoPath}' not found.");
-                return;
-            }
+            await _rfidScanner.AddMappingAsync(rfidTag, videoPath);
+            Console.WriteLine("RFID mapping added successfully.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error adding RFID mapping: {ex.Message}");
+        }
+    }
 
-            if (!IsVideoFile(videoPath))
-            {
-                Console.WriteLine($"Error: '{videoPath}' does not appear to be a supported video file.");
-                Console.WriteLine($"Supported extensions: {string.Join(", ", SupportedVideoExtensions)}");
-                return;
-            }
+    private static async Task RemoveRFIDMapping()
+    {
+        if (_rfidScanner == null) return;
 
-            Console.WriteLine($"Playing video: {Path.GetFileName(videoPath)}");
-            Console.WriteLine("Press 'q' to stop playback or Ctrl+C to exit.");
+        if (_rfidScanner.MappingCount == 0)
+        {
+            Console.WriteLine("No RFID mappings to remove.");
+            return;
+        }
 
-            // For Raspberry Pi, use hardware acceleration if available
-            if (RuntimeInformation.OSArchitecture == Architecture.Arm ||
-                RuntimeInformation.OSArchitecture == Architecture.Arm64)
+        _rfidScanner.ShowMappings();
+        Console.Write("\nEnter RFID tag to remove: ");
+        var rfidTag = Console.ReadLine()?.Trim();
+
+        if (string.IsNullOrWhiteSpace(rfidTag))
+        {
+            Console.WriteLine("Invalid RFID tag value.");
+            return;
+        }
+
+        try
+        {
+            var removed = await _rfidScanner.RemoveMappingAsync(rfidTag);
+            if (removed)
             {
-                // Raspberry Pi optimizations
-                await PlayVideoOnRaspberryPi(videoPath);
+                Console.WriteLine("RFID mapping removed successfully.");
             }
             else
             {
-                // Standard playback for development/testing
-                await PlayVideoStandard(videoPath);
+                Console.WriteLine("RFID tag not found in mappings.");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error playing video: {ex.Message}");
+            Console.WriteLine($"Error removing RFID mapping: {ex.Message}");
         }
     }
 
-    private static async Task PlayVideoOnRaspberryPi(string videoPath)
+    private static async Task TestRFIDScanner()
+    {
+        if (_rfidScanner == null)
+        {
+            Console.WriteLine("RFID scanner is not available.");
+            return;
+        }
+
+        Console.WriteLine("RFID scanner test mode. Scan an RFID tag or press Enter to stop...");
+        _rfidScanner.ShowScannerStatus();
+
+        // Wait for user input to stop test
+        await Task.Run(() => Console.ReadLine());
+        Console.WriteLine("Test mode ended.");
+    }
+
+    private static async Task HandleRFIDScan()
+    {
+        if (_rfidScanner == null || !_rfidScanner.IsEnabled)
+        {
+            Console.WriteLine("RFID scanner is not enabled. Please check your scanner connection.");
+            return;
+        }
+
+        Console.WriteLine("Waiting for RFID scan... (Press Enter to stop)");
+        Console.WriteLine("Scan an RFID tag near the scanner.");
+
+        // Wait for user input to stop scanning
+        await Task.Run(() => Console.ReadLine());
+        Console.WriteLine("RFID scan mode ended.");
+    }
+
+    private static async Task HandleVideoLibrary()
+    {
+        while (true)
+        {
+            Console.WriteLine("\nVideo Library:");
+            Console.WriteLine("1. Browse all videos");
+            Console.WriteLine("2. Search videos");
+            Console.WriteLine("3. Browse by genre");
+            Console.WriteLine("4. Recently played");
+            Console.WriteLine("5. Most played");
+            Console.WriteLine("6. Favorites");
+            Console.WriteLine("7. Add video to library");
+            Console.WriteLine("8. Scan directory for videos");
+            Console.WriteLine("9. Back to main menu");
+            Console.Write("\nSelect option (1-9): ");
+
+            var choice = Console.ReadLine() ?? "";
+
+            switch (choice)
+            {
+                case "1":
+                    await BrowseAllVideos();
+                    break;
+                case "2":
+                    await SearchVideos();
+                    break;
+                case "3":
+                    await BrowseByGenre();
+                    break;
+                case "4":
+                    await ShowRecentlyPlayed();
+                    break;
+                case "5":
+                    await ShowMostPlayed();
+                    break;
+                case "6":
+                    await ShowFavorites();
+                    break;
+                case "7":
+                    await AddVideoToLibrary();
+                    break;
+                case "8":
+                    await ScanDirectoryForVideos();
+                    break;
+                case "9":
+                    return;
+                default:
+                    Console.WriteLine("Invalid choice. Please try again.");
+                    break;
+            }
+        }
+    }
+
+    private static async Task BrowseAllVideos()
     {
         try
         {
-            // Use omxplayer if available (legacy), or try hardware-accelerated ffplay
-            if (File.Exists("/usr/bin/omxplayer"))
-            {
-                Console.WriteLine("Using OMXPlayer for hardware acceleration...");
-                var omxProcess = new Process
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "/usr/bin/omxplayer",
-                        Arguments = $"\"{videoPath}\"",
-                        UseShellExecute = false
-                    }
-                };
-
-                omxProcess.Start();
-                await omxProcess.WaitForExitAsync();
-            }
-            else if (File.Exists("/usr/bin/ffplay"))
-            {
-                Console.WriteLine("Using FFPlay with hardware acceleration...");
-                var ffplayProcess = new Process
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "/usr/bin/ffplay",
-                        Arguments = $"-hwaccel auto -i \"{videoPath}\"",
-                        UseShellExecute = false
-                    }
-                };
-
-                ffplayProcess.Start();
-                await ffplayProcess.WaitForExitAsync();
-            }
-            else
-            {
-                // Fallback to standard FFMpeg conversion/streaming
-                Console.WriteLine("Using FFMpeg for playback...");
-                await ConvertAndDisplay(videoPath);
-            }
+            var videos = await VideoManager.VideoFileService.GetAllVideoFilesAsync();
+            await DisplayVideoListAndPlay(videos, "All Videos");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error during Raspberry Pi playback: {ex.Message}");
-            Console.WriteLine("Falling back to standard playback...");
-            await PlayVideoStandard(videoPath);
+            Console.WriteLine($"Error browsing videos: {ex.Message}");
         }
     }
 
-    private static async Task PlayVideoStandard(string videoPath)
+    private static async Task SearchVideos()
     {
+        Console.Write("Enter search term: ");
+        var searchTerm = Console.ReadLine()?.Trim();
+
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            Console.WriteLine("Search term cannot be empty.");
+            return;
+        }
+
         try
         {
-            // Try to use system's default video player
-            var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = videoPath,
-                    UseShellExecute = true
-                }
-            };
-
-            process.Start();
-            Console.WriteLine("Video opened in system default player.");
-            Console.WriteLine("Press any key to continue...");
-            Console.ReadKey();
+            var videos = await VideoManager.VideoFileService.SearchVideoFilesAsync(searchTerm);
+            await DisplayVideoListAndPlay(videos, $"Search results for '{searchTerm}'");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Could not open with system player: {ex.Message}");
-            await ConvertAndDisplay(videoPath);
+            Console.WriteLine($"Error searching videos: {ex.Message}");
         }
     }
 
-    private static async Task ConvertAndDisplay(string videoPath)
+    private static async Task BrowseByGenre()
     {
         try
         {
-            Console.WriteLine("Processing video with FFMpeg...");
+            var genres = await VideoManager.VideoFileService.GetGenresAsync();
+            var genreList = genres.ToList();
 
-            var mediaInfo = await FFProbe.AnalyseAsync(videoPath);
-            Console.WriteLine($"Duration: {mediaInfo.Duration}");
-            Console.WriteLine($"Video Codec: {mediaInfo.PrimaryVideoStream?.CodecName}");
-            Console.WriteLine($"Audio Codec: {mediaInfo.PrimaryAudioStream?.CodecName}");
-
-            Console.WriteLine("Note: For full video playback, use a video player application.");
-            Console.WriteLine("This application can process and analyze video files.");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error processing video: {ex.Message}");
-        }
-    }
-
-    private static async Task ShowVideoInfo(string videoPath)
-    {
-        try
-        {
-            if (!File.Exists(videoPath))
+            if (!genreList.Any())
             {
-                Console.WriteLine($"Error: File '{videoPath}' not found.");
+                Console.WriteLine("No genres found in the library.");
                 return;
             }
 
-            Console.WriteLine($"Analyzing video: {Path.GetFileName(videoPath)}");
-
-            var mediaInfo = await FFProbe.AnalyseAsync(videoPath);
-
-            Console.WriteLine("\n=== Video Information ===");
-            Console.WriteLine($"File: {Path.GetFileName(videoPath)}");
-            Console.WriteLine($"Duration: {mediaInfo.Duration}");
-            Console.WriteLine($"Size: {new FileInfo(videoPath).Length / (1024 * 1024)} MB");
-
-            if (mediaInfo.PrimaryVideoStream != null)
+            Console.WriteLine("\nGenres:");
+            for (int i = 0; i < genreList.Count; i++)
             {
-                var video = mediaInfo.PrimaryVideoStream;
-                Console.WriteLine($"\nVideo Stream:");
-                Console.WriteLine($"  Codec: {video.CodecName}");
-                Console.WriteLine($"  Resolution: {video.Width}x{video.Height}");
-                Console.WriteLine($"  Frame Rate: {video.FrameRate:F2} fps");
-                Console.WriteLine($"  Bit Rate: {video.BitRate / 1000} kbps");
-                Console.WriteLine($"  Pixel Format: {video.PixelFormat}");
+                Console.WriteLine($"{i + 1}. {genreList[i]}");
             }
 
-            if (mediaInfo.PrimaryAudioStream != null)
+            Console.Write($"\nSelect genre (1-{genreList.Count}): ");
+            if (int.TryParse(Console.ReadLine(), out var genreIndex) &&
+                genreIndex >= 1 && genreIndex <= genreList.Count)
             {
-                var audio = mediaInfo.PrimaryAudioStream;
-                Console.WriteLine($"\nAudio Stream:");
-                Console.WriteLine($"  Codec: {audio.CodecName}");
-                Console.WriteLine($"  Sample Rate: {audio.SampleRateHz} Hz");
-                Console.WriteLine($"  Channels: {audio.Channels}");
-                Console.WriteLine($"  Bit Rate: {audio.BitRate / 1000} kbps");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error analyzing video: {ex.Message}");
-        }
-    }
-
-    private static void ListVideosInDirectory(string directoryPath)
-    {
-        try
-        {
-            if (!Directory.Exists(directoryPath))
-            {
-                Console.WriteLine($"Error: Directory '{directoryPath}' not found.");
-                return;
-            }
-
-            Console.WriteLine($"\nVideo files in '{directoryPath}':");
-            Console.WriteLine(new string('-', 50));
-
-            var videoFiles = Directory.GetFiles(directoryPath, "*.*", SearchOption.TopDirectoryOnly)
-                .Where(file => IsVideoFile(file))
-                .ToList();
-
-            if (videoFiles.Any())
-            {
-                for (int i = 0; i < videoFiles.Count; i++)
-                {
-                    var fileInfo = new FileInfo(videoFiles[i]);
-                    Console.WriteLine($"{i + 1,3}. {fileInfo.Name,-30} ({fileInfo.Length / (1024 * 1024)} MB)");
-                }
-
-                Console.WriteLine($"\nFound {videoFiles.Count} video file(s)");
+                var selectedGenre = genreList[genreIndex - 1];
+                var videos = await VideoManager.VideoFileService.GetVideoFilesByGenreAsync(selectedGenre);
+                await DisplayVideoListAndPlay(videos, $"Videos in genre '{selectedGenre}'");
             }
             else
             {
-                Console.WriteLine("No video files found in the specified directory.");
+                Console.WriteLine("Invalid genre selection.");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error listing directory: {ex.Message}");
+            Console.WriteLine($"Error browsing by genre: {ex.Message}");
         }
     }
 
-    private static bool IsVideoFile(string filePath)
+    private static async Task ShowRecentlyPlayed()
     {
-        string extension = Path.GetExtension(filePath).ToLowerInvariant();
-        return SupportedVideoExtensions.Contains(extension);
+        try
+        {
+            var videos = await VideoManager.VideoFileService.GetRecentlyPlayedAsync();
+            await DisplayVideoListAndPlay(videos, "Recently Played Videos");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error showing recently played: {ex.Message}");
+        }
+    }
+
+    private static async Task ShowMostPlayed()
+    {
+        try
+        {
+            var videos = await VideoManager.VideoFileService.GetMostPlayedAsync();
+            await DisplayVideoListAndPlay(videos, "Most Played Videos");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error showing most played: {ex.Message}");
+        }
+    }
+
+    private static async Task ShowFavorites()
+    {
+        try
+        {
+            var videos = await VideoManager.VideoFileService.GetFavoriteVideoFilesAsync();
+            await DisplayVideoListAndPlay(videos, "Favorite Videos");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error showing favorites: {ex.Message}");
+        }
+    }
+
+    private static async Task DisplayVideoListAndPlay(IEnumerable<VideoPlayer.Models.VideoFile> videos, string title)
+    {
+        var videoList = videos.ToList();
+
+        if (!videoList.Any())
+        {
+            Console.WriteLine($"No videos found for '{title}'.");
+            return;
+        }
+
+        Console.WriteLine($"\n{title}:");
+        Console.WriteLine(new string('-', 80));
+
+        for (int i = 0; i < videoList.Count; i++)
+        {
+            var video = videoList[i];
+            var durationStr = video.Duration?.ToString(@"hh\:mm\:ss") ?? "Unknown";
+            var playCountStr = video.PlayCount > 0 ? $"({video.PlayCount} plays)" : "";
+            var favoriteStr = video.IsFavorite ? "⭐" : "";
+
+            Console.WriteLine($"{i + 1,3}. {video.DisplayName,-40} {durationStr,-10} {video.FileSizeDisplay,-10} {favoriteStr} {playCountStr}");
+        }
+
+        Console.WriteLine($"\nTotal: {videoList.Count} video(s)");
+        Console.Write($"Select video to play (1-{videoList.Count}), or 0 to go back: ");
+
+        if (int.TryParse(Console.ReadLine(), out var choice))
+        {
+            if (choice == 0)
+            {
+                return;
+            }
+
+            if (choice >= 1 && choice <= videoList.Count)
+            {
+                var selectedVideo = videoList[choice - 1];
+                await VideoManager.PlayVideoAsync(selectedVideo.FilePath);
+            }
+            else
+            {
+                Console.WriteLine("Invalid selection.");
+            }
+        }
+    }
+
+    private static async Task AddVideoToLibrary()
+    {
+        Console.Write("Enter video file path: ");
+        var filePath = Console.ReadLine()?.Trim();
+
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            Console.WriteLine("File path cannot be empty.");
+            return;
+        }
+
+        if (!File.Exists(filePath))
+        {
+            Console.WriteLine($"File not found: {filePath}");
+            return;
+        }
+
+        Console.Write("Enter title (optional, press Enter to use filename): ");
+        var title = Console.ReadLine()?.Trim();
+
+        Console.Write("Enter description (optional): ");
+        var description = Console.ReadLine()?.Trim();
+
+        Console.Write("Enter genre (optional): ");
+        var genre = Console.ReadLine()?.Trim();
+
+        try
+        {
+            var videoFile = await VideoManager.VideoFileService.AddVideoFileAsync(
+                filePath,
+                string.IsNullOrWhiteSpace(title) ? null : title,
+                string.IsNullOrWhiteSpace(description) ? null : description,
+                string.IsNullOrWhiteSpace(genre) ? null : genre
+            );
+
+            Console.WriteLine($"Video '{videoFile.DisplayName}' added to library successfully!");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error adding video to library: {ex.Message}");
+        }
+    }
+
+    private static async Task ScanDirectoryForVideos()
+    {
+        Console.Write("Enter directory path to scan: ");
+        var dirPath = Console.ReadLine()?.Trim();
+
+        if (string.IsNullOrWhiteSpace(dirPath))
+        {
+            Console.WriteLine("Directory path cannot be empty.");
+            return;
+        }
+
+        if (!Directory.Exists(dirPath))
+        {
+            Console.WriteLine($"Directory not found: {dirPath}");
+            return;
+        }
+
+        Console.Write("Scan subdirectories recursively? (y/N): ");
+        var recursive = Console.ReadLine()?.Trim().ToLowerInvariant() == "y";
+
+        try
+        {
+            Console.WriteLine($"Scanning {dirPath}...");
+            var addedCount = await VideoManager.VideoFileService.ScanDirectoryAsync(dirPath, recursive);
+            Console.WriteLine($"Scan completed. {addedCount} new video(s) added to library.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error scanning directory: {ex.Message}");
+        }
     }
 }
