@@ -226,3 +226,5 @@ Backup*/
 UpgradeLog*.XML
 UpgradeLog*.htm
 CDF_ERRORS.TXT
+.DS_Store
+.DS_Store
