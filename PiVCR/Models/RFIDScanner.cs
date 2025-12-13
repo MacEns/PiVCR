@@ -1,23 +1,36 @@
 using System.IO.Ports;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
+using PiVCR.Services;
 
 namespace PiVCR.Models;
+
+public enum RFIDScannerType
+{
+    Serial,
+    RC522_SPI,
+    RC522_I2C
+}
 
 public class RFIDScanner : IDisposable
 {
     private SerialPort? _rfidPort;
+    private RC522RfidService? _rc522Service;
+    private RFIDScannerType _scannerType = RFIDScannerType.RC522_SPI;
     private Dictionary<string, string> _rfidToVideoMap = new();
     private bool _isEnabled = false;
     private readonly string _configFilePath;
+    private readonly IConfiguration? _configuration;
 
     public event EventHandler<RFIDTagEventArgs>? TagDetected;
 
     public bool IsEnabled => _isEnabled;
     public int MappingCount => _rfidToVideoMap.Count;
 
-    public RFIDScanner(string configFilePath = "rfid-config.json")
+    public RFIDScanner(string configFilePath = "rfid-config.json", IConfiguration? configuration = null)
     {
         _configFilePath = configFilePath;
+        _configuration = configuration;
     }
 
     public async Task InitializeAsync()
@@ -27,40 +40,34 @@ public class RFIDScanner : IDisposable
             // Load RFID configuration
             await LoadConfigurationAsync();
 
-            // Try to detect and configure RFID scanner
-            Console.WriteLine("Initializing RFID scanner...");
-
-            // Common serial port names for RFID scanners on Raspberry Pi
-            var possiblePorts = new[]
+            // Check if RFID is enabled in configuration
+            var rfidEnabled = _configuration?.GetValue<bool>("PiVCR:RFID:Enabled") ?? true;
+            if (!rfidEnabled)
             {
-                "/dev/ttyUSB0",
-                "/dev/ttyUSB1",
-                "/dev/ttyACM0",
-                "/dev/ttyACM1"
-            };
+                Console.WriteLine("RFID scanner disabled in configuration.");
+                return;
+            }
 
-            foreach (var port in possiblePorts)
+            // Get scanner type from configuration
+            var scannerTypeStr = _configuration?.GetValue<string>("PiVCR:RFID:Type") ?? "RC522_SPI";
+            if (Enum.TryParse<RFIDScannerType>(scannerTypeStr, out var scannerType))
             {
-                if (File.Exists(port))
-                {
-                    try
-                    {
-                        _rfidPort = new SerialPort(port, 9600, Parity.None, 8, StopBits.One);
-                        _rfidPort.DataReceived += OnDataReceived;
-                        _rfidPort.Open();
-                        _isEnabled = true;
-                        Console.WriteLine($"RFID scanner connected on {port}");
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine(
-                            $"Could not connect to RFID scanner on {port}: {ex.Message}"
-                        );
-                        _rfidPort?.Dispose();
-                        _rfidPort = null;
-                    }
-                }
+                _scannerType = scannerType;
+            }
+
+            Console.WriteLine($"Initializing RFID scanner ({_scannerType})...");
+
+            switch (_scannerType)
+            {
+                case RFIDScannerType.RC522_SPI:
+                    await InitializeRC522SPI();
+                    break;
+                case RFIDScannerType.Serial:
+                    await InitializeSerial();
+                    break;
+                default:
+                    Console.WriteLine($"Scanner type {_scannerType} not yet implemented.");
+                    break;
             }
 
             if (!_isEnabled)
@@ -72,6 +79,63 @@ public class RFIDScanner : IDisposable
         {
             Console.WriteLine($"Error initializing RFID scanner: {ex.Message}");
         }
+    }
+
+    private async Task InitializeRC522SPI()
+    {
+        try
+        {
+            var spiBus = _configuration?.GetValue<int>("PiVCR:RFID:SPI:BusId") ?? 0;
+            var chipSelect = _configuration?.GetValue<int>("PiVCR:RFID:SPI:ChipSelectLine") ?? 0;
+            var resetPin = _configuration?.GetValue<int>("PiVCR:RFID:SPI:ResetPin") ?? 25;
+
+            _rc522Service = new RC522RfidService(spiBus, chipSelect, resetPin);
+            _rc522Service.TagDetected += OnRC522TagDetected;
+            _rc522Service.StartScanning();
+            _isEnabled = true;
+            await Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to initialize RC522: {ex.Message}");
+            _rc522Service?.Dispose();
+            _rc522Service = null;
+        }
+    }
+
+    private async Task InitializeSerial()
+    {
+        var possiblePorts = _configuration?.GetSection("PiVCR:RFID:Serial:PortNames").Get<string[]>()
+            ?? new[] { "/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyACM0", "/dev/ttyACM1", "/dev/serial0" };
+        var baudRate = _configuration?.GetValue<int>("PiVCR:RFID:Serial:BaudRate") ?? 9600;
+
+        foreach (var port in possiblePorts)
+        {
+            if (File.Exists(port))
+            {
+                try
+                {
+                    _rfidPort = new SerialPort(port, baudRate, Parity.None, 8, StopBits.One);
+                    _rfidPort.DataReceived += OnDataReceived;
+                    _rfidPort.Open();
+                    _isEnabled = true;
+                    Console.WriteLine($"✓ RFID scanner connected on {port}");
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Could not connect to RFID scanner on {port}: {ex.Message}");
+                    _rfidPort?.Dispose();
+                    _rfidPort = null;
+                }
+            }
+        }
+        await Task.CompletedTask;
+    }
+
+    private void OnRC522TagDetected(object? sender, string tagId)
+    {
+        TagDetected?.Invoke(this, new RFIDTagEventArgs(tagId));
     }
 
     public async Task LoadConfigurationAsync()
@@ -223,6 +287,7 @@ public class RFIDScanner : IDisposable
                 _rfidPort.Close();
             }
             _rfidPort?.Dispose();
+            _rc522Service?.Dispose();
         }
         catch (Exception ex)
         {

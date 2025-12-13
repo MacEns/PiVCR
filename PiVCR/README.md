@@ -98,7 +98,7 @@ The application uses `appsettings.json` for configuration:
 
 ```json
 {
-    "VideoPlayer": {
+    "PiVCR": {
         "DefaultVideoPath": "/home/pi/Videos",
         "RaspberryPi": {
             "UseHardwareAcceleration": true,
@@ -107,21 +107,166 @@ The application uses `appsettings.json` for configuration:
         },
         "RFID": {
             "Enabled": true,
-            "PortNames": [
-                "/dev/ttyUSB0",
-                "/dev/ttyUSB1",
-                "/dev/ttyACM0",
-                "/dev/ttyACM1"
-            ],
-            "BaudRate": 9600,
-            "DataBits": 8,
-            "Parity": "None",
-            "StopBits": "One",
+            "Type": "RC522_SPI",
+            "SPI": {
+                "BusId": 0,
+                "ChipSelectLine": 0,
+                "ResetPin": 25
+            },
+            "Serial": {
+                "PortNames": [
+                    "/dev/ttyUSB0",
+                    "/dev/ttyUSB1",
+                    "/dev/ttyACM0",
+                    "/dev/ttyACM1",
+                    "/dev/serial0"
+                ],
+                "BaudRate": 9600
+            },
             "ConfigFile": "rfid-config.json"
         }
     }
 }
 ```
+
+## RC522 RFID Module Setup
+
+The PiVCR now supports the **RC522 RFID module** over SPI for reading RFID/NFC cards. This is the recommended method for RFID integration.
+
+### Hardware Connection (SPI)
+
+Connect your RC522 module to the Raspberry Pi 3B as follows:
+
+| RC522 Pin    | Raspberry Pi Pin                    | GPIO           | Description |
+| ------------ | ----------------------------------- | -------------- | ----------- |
+| **SDA (SS)** | Pin 24                              | GPIO 8 (CE0)   | Chip Select |
+| **SCK**      | Pin 23                              | GPIO 11 (SCLK) | SPI Clock   |
+| **MOSI**     | Pin 19                              | GPIO 10 (MOSI) | Master Out  |
+| **MISO**     | Pin 21                              | GPIO 9 (MISO)  | Master In   |
+| **RST**      | Pin 22                              | GPIO 25        | Reset       |
+| **GND**      | Pin 6, 9, 14, 20, 25, 30, 34, or 39 | GND            | Ground      |
+| **3.3V**     | Pin 1 or 17                         | 3.3V           | Power       |
+
+#### Visual Pin Layout
+
+```
+Raspberry Pi 3B GPIO Header (top view):
+
+3.3V ─────┐   ┌───── 5V
+    [ 1] [ 2]
+          [ 3] [ 4]  5V
+          [ 5] [ 6] ─── GND (RC522)
+          [ 7] [ 8]
+    GND  [ 9] [10]
+         [11] [12]
+         [13] [14]
+         [15] [16]
+3.3V ────[17] [18]
+MOSI ────[19] [20]  GND
+MISO ────[21] [22] ─── RST (RC522)
+SCK  ────[23] [24] ─── SDA/SS (RC522)
+         [25] [26]
+```
+
+⚠️ **IMPORTANT**:
+
+-   RC522 operates at **3.3V only** - do NOT connect to 5V or you will damage the module!
+-   Ensure your RC522 module is specifically designed for 3.3V (most are)
+
+### Enable SPI on Raspberry Pi
+
+1. **Enable SPI interface:**
+
+```bash
+sudo raspi-config
+# Navigate to: Interface Options → SPI → Yes
+# Select: Finish → Reboot
+```
+
+2. **Verify SPI is enabled after reboot:**
+
+```bash
+# Check if SPI modules are loaded
+lsmod | grep spi
+# Should show: spi_bcm2835 or similar
+
+# Check SPI devices exist
+ls -l /dev/spi*
+# Should show: /dev/spidev0.0 and /dev/spidev0.1
+```
+
+### Software Configuration
+
+The RC522 support is already included in PiVCR. The configuration in `appsettings.json` should look like this:
+
+```json
+{
+    "PiVCR": {
+        "RFID": {
+            "Enabled": true,
+            "Type": "RC522_SPI",
+            "SPI": {
+                "BusId": 0,
+                "ChipSelectLine": 0,
+                "ResetPin": 25
+            },
+            "ConfigFile": "rfid-config.json"
+        }
+    }
+}
+```
+
+### Alternative: Serial RFID Scanner
+
+If you prefer using a USB/Serial RFID scanner instead, update the configuration:
+
+```json
+{
+    "PiVCR": {
+        "RFID": {
+            "Enabled": true,
+            "Type": "Serial",
+            "Serial": {
+                "PortNames": [
+                    "/dev/ttyUSB0",
+                    "/dev/ttyUSB1",
+                    "/dev/ttyACM0",
+                    "/dev/ttyACM1",
+                    "/dev/serial0"
+                ],
+                "BaudRate": 9600
+            },
+            "ConfigFile": "rfid-config.json"
+        }
+    }
+}
+```
+
+### Testing Your RC522 Module
+
+1. **Run PiVCR:**
+
+```bash
+cd PiVCR
+dotnet run
+```
+
+2. **Look for initialization message:**
+
+```
+✓ RC522 RFID reader initialized successfully on SPI bus 0, CS 0, RST pin 25
+✓ Starting RC522 RFID scanning...
+```
+
+3. **Place an RFID/NFC card near the reader**
+
+You should see:
+
+```
+✓ RFID Tag detected: A1B2C3D4
+```
+
+If you see errors about SPI not being available, make sure you've enabled SPI and rebooted the Pi.
 
 ## RFID Scanner Integration
 

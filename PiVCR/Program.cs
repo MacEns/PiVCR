@@ -1,20 +1,28 @@
 ﻿using PiVCR;
 using PiVCR.Models;
+using Microsoft.Extensions.Configuration;
 
 class Program
 {
     private static RFIDScanner? _rfidScanner;
+    private static IConfiguration? _configuration;
 
     static async Task Main(string[] args)
     {
         Console.WriteLine("=== PiVCR - Raspberry Pi Video Control & Recording ===");
         Console.WriteLine();
 
+        // Load configuration
+        _configuration = new ConfigurationBuilder()
+            .SetBasePath(Directory.GetCurrentDirectory())
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            .Build();
+
         // Configure FFMpeg binary path for Raspberry Pi
         VideoManager.ConfigureFFMpeg();
 
-        // Initialize RFID scanner
-        _rfidScanner = new RFIDScanner();
+        // Initialize RFID scanner with configuration
+        _rfidScanner = new RFIDScanner(configuration: _configuration);
         _rfidScanner.TagDetected += OnRFIDTagDetected;
         await _rfidScanner.InitializeAsync();
 
